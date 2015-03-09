@@ -8,15 +8,10 @@ Edwin Seah
 
 1. Load the data (i.e. `read.csv()`)
 
-2. Process/transform the data (if necessary) into a format suitable for your analysis
-
 + We unzip the raw zip file containing activity data into a specified data 
 directory within our working directory, and load it using `read.csv()` into
 a data frame called **df**. Integer is also specified as the type for *interval*
-to simplify scaling and sorting later. We could also transform our intervals 
-into *Date* or *Time* objects but for this analysis since they are 288 5-minute
-intervals each day we can keep the original sequential integer form for the
-intervals.
+to simplify transforming. 
 
 
 ```r
@@ -27,6 +22,22 @@ df <- read.csv("data/activity.csv",
                )
 ```
 
+2. Process/transform the data (if necessary) into a format suitable for your analysis
+
++ We will use transform *date* and *interval* to form a new *hhmm* column in
+order to plot the data accurately. Instead of converting the interval to a POSIXlt
+object (which force-inserts an arbritary Date) we'll use a sequential integer 
+called *intervalID* that we attach to every interval using `cbind()` with 
+replacement, knowing that there are always 288 5-min intervals per day. Checks on
+the original dataset dimensions reveal they are roundly divisible by 288 as well, 
+showing there are indeed 61 unique days in the data set.
+
+
+```r
+df$hhmm=sprintf("%04d", df$interval)
+df <- cbind(df, seq(unique(df$interval)))
+names(df) <- c("steps", "date", "interval", "hhmm", "intervalID")
+```
 
 ## What is mean total number of steps taken per day?  
 
@@ -38,11 +49,11 @@ transform the raw data frame **df**:
 
     + Group by *date*
     + Add a column called *totalSteps* which is simply the sum of all steps in a day
-    + Remove *interval* and *steps* columns so that we can group by 
+    + Remove *interval*, *steps*, and *datetime* columns so that we can group by 
     *date* and call `unique()` to isolate only unique rows
     + Results in new data frame **mts** comprising 2 columns, *date* and *totalSteps*
 
-+ Plotting the histogram and specifying `breaks=10` allows for a reasonable number
++ Plotting the histogram and specifying `breaks=20` allows for a reasonable number
 of 20 bins in our histogram, such that we can better observe the estimated 
 distribution.  
 
@@ -50,9 +61,11 @@ distribution.
 ```r
 library(dplyr)
 # Create the NA-free data frame
+# Have to remove interval, steps, hhmm and intervalID to make the hist from 
+# unique values
 mts <- df[complete.cases(df),] %>% 
     group_by(date) %>% 
-    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL) %>%
+    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL, hhmm=NULL, intervalID=NULL) %>%
     unique()
 # Plot the histogram
 hist(mts$totalSteps, 
@@ -95,24 +108,31 @@ median(mts$totalSteps)
 1. Make a time series plot (i.e. `type = "l"`) of the 5-minute interval (x-axis) 
 and the average number of steps taken, averaged across all days (y-axis)
 
-+ In order to make this plot, we first need to build a data frame for it, which
-we will call **avgDaily**.
++ In order to make this plot, we'll first create a data frame called **avgDaily**.
 This can be neatly done with **dplyr** again, by piping only the non-NA
 observations via `complete.cases()`, then calling `summarise_each()` on the 
-grouped intervals to obtain the means across all days for every interval.
-Then the plot can be made with `xyplot()` from the **lattice** plotting system.
+groups of *intervalID* to obtain the means across all days for every interval.
+Then the plot can be made with `xyplot()` from the **lattice** plotting system. 
+Because we had intentionally transformed the intervals into integer-based 
+*intervalID* it plots faster and we get finer control over the x-axis display.
 
 
 ```r
 # Derive a data frame that excludes all non-NA values
+# We group by intervalID, hhmm, and interval so that we can use interval later
 avgDaily <- df[complete.cases(df),] %>% 
-    group_by(interval) %>% 
+    group_by(intervalID, hhmm, interval) %>% 
     summarise_each(funs(mean), steps)
 # PLot using lattice
 library(lattice)
-xyplot(steps ~ interval, 
+xyplot(steps ~ intervalID, 
        avgDaily, 
        type="l", 
+       scales=list(x=list
+                   (at=c(12, 48, 84, 120, 
+                         156, 192, 228, 264), 
+                    labels=c("01:00","04:00", "07:00", "10:00", 
+                             "13:00", "16:00", "19:00", "21:00"))),
        xlab="Interval",
        ylab="Average Number of Steps",
        main="Average Daily Activity Pattern of Steps per 5-min interval")
@@ -122,10 +142,11 @@ xyplot(steps ~ interval,
 
 2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
 
-+ We use `select()` (from **dplyr**) on the **avgDaily** data frame to get the 
-whole list of averaged number of steps per 5-minute interval, then use `max()` 
-to find the specific 5-minute interval which has the maximum number of steps, 
-which is  **835**.
++ We subset the **avgDaily** data frame by `max(avgDaily$steps)` to find the 
+specific 5-minute interval which has the maximum number of steps, which is
+**835**. If we
+had not grouped by interval as well earlier on, the code would still be 
+straightforward but a lot more tedious.
 
 
 ```r
@@ -163,8 +184,8 @@ original dataset, and **8** days when they do occur.
 Dividing the NA rows by the number of days with NA rows gives us exactly 
 **288**, which is the exact number of
 5-minute intervals per day. Since we already have the mean across all days for 
-every 5-minute interval in the data frame **avgDaily**, we can re-use them to fill
-in the missing data.
+every 5-minute interval in the data frame **avgDaily**, our strategy for imputing the
+missing values simply re-uses the 5-minute interval means from **avgDaily** as fillers.
 
 3. Create a new dataset that is equal to the original dataset but with the missing data filled in.  
 
@@ -175,7 +196,10 @@ through `mutate()` to fill in the missing values where there are NAs.
 
 ```r
 # Using mean for each 5-minute interval from avgDaily to fill in missing values
-filled <- merge(df, avgDaily, by="interval", type="left", match="first")
+filled <- merge(df, avgDaily, 
+                by=c("interval", "intervalID", "hhmm"), 
+                type="left", 
+                match="first")
 filled <- filled  %>% 
     mutate(steps=(ifelse(is.na(steps.x), 
                          steps.y, 
@@ -200,7 +224,7 @@ but does raise the imputed median slightly to match the mean.
 # Make mtsImputed re-using code from making mts
 mtsImputed <- filled %>% 
     group_by(date) %>% 
-    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL) %>%
+    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL, hhmm=NULL, intervalID=NULL) %>%
     unique()
 # Make the histogram
 hist(mtsImputed$totalSteps, 
@@ -261,11 +285,13 @@ or a `"Sunday"`, and "weekday" otherwise.
 ```r
 filled <- 
     filled %>% 
-    mutate ( daytype = as.factor (
-        ifelse ( 
-            weekdays(date)=="Saturday" | weekdays(date)=="Sunday", 
-            "weekend", 
-            "weekday"))
+    mutate (
+        daytype = as.factor (
+            ifelse (
+                weekdays(date)=="Saturday" | weekdays(date)=="Sunday", 
+                "weekend", 
+                "weekday")
+            )
         )
 ```
 
@@ -280,10 +306,18 @@ split into two panels by our new factor variable *daytype*.
 ```r
 # Munge the filled data frame to get average daily pattern by daytype and interval
 filled <- filled %>%
-    group_by(daytype, interval) %>%
+    group_by(daytype, intervalID, hhmm, interval) %>%
     summarise_each(funs(mean), steps)
 # Plot a panel with 1 col and 2 rows using xyplot
-xyplot(steps ~ interval | daytype, filled, type="l", layout=c(1,2))
+# We use the sequential intervalID instead of interval itself to avoid the time gaps
+# It also allows us to conveniently set the scales for the x-axis
+xyplot(steps ~ intervalID | daytype, 
+       filled, 
+       type="l",
+       layout=c(1,2),
+       scales=list(x=list(at=c(12, 48, 84, 120, 156, 192, 228, 264), labels=c("01:00","04:00", "07:00", "10:00", "13:00", "16:00", "19:00", "21:00"))),
+       xlab="interval",
+       main="Average Daily Activity Pattern of Steps per 5-min interval")
 ```
 
 ![](figures/plot_activity_weekdays-1.png) 
