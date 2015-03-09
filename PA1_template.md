@@ -11,7 +11,7 @@ Edwin Seah
 + We unzip the raw zip file containing activity data into a specified data 
 directory within our working directory, and load it using `read.csv()` into
 a data frame called **df**. Integer is also specified as the type for *interval*
-to simplify transforming. 
+to simplify transforming.  
 
 
 ```r
@@ -21,8 +21,8 @@ df <- read.csv("data/activity.csv",
                colClasses=c("integer", "Date", "integer")
                )
 ```
-
-2. Process/transform the data (if necessary) into a format suitable for your analysis
+  
+2. Process/transform the data (if necessary) into a format suitable for your analysis  
 
 + We will use transform *date* and *interval* to form a new *hhmm* column in
 order to plot the data accurately. Instead of converting the interval to a POSIXlt
@@ -30,7 +30,7 @@ object (which force-inserts an arbritary Date) we'll use a sequential integer
 called *intervalID* that we attach to every interval using `cbind()` with 
 replacement, knowing that there are always 288 5-min intervals per day. Checks on
 the original dataset dimensions reveal they are roundly divisible by 288 as well, 
-showing there are indeed 61 unique days in the data set.
+showing there are indeed 61 unique days in the data set.  
 
 
 ```r
