@@ -57,15 +57,16 @@ names(df) <- c("steps", "date", "interval", "hhmm", "intervalID")
 To create this new data frame (called **mts**), we use the **dplyr** package to
 transform the raw data frame **df**:
 
+    + Remove *interval*, *steps*, and *datetime* columns (we do not need them)
     + Group by *date*
-    + Add a column called *totalSteps* which is simply the sum of all steps in a day
-    + Remove *interval*, *steps*, and *datetime* columns so that we can group by 
-    *date* and call `unique()` to isolate only unique rows
+    + Add a column called *totalSteps* which is simply the sum of all steps in a
+    day, then remove *steps* since we are done using it to calculate *totalSteps*
+    + Now we can call `unique()` to isolate the total for each day rows instead 
+    of mistakenly plotting the same total multiple times per day
     + Results in new data frame **mts** comprising 2 columns, *date* and *totalSteps*
 
-+ Plotting the histogram and specifying `breaks=20` allows for a reasonable number
-of 20 bins in our histogram, such that we can better observe the estimated 
-distribution.  
++ A simple histogram of the *totalSteps* column from **mts** is plotted without
+specifying any bins.  
 
 ```{r, histogram_totalsteps_estimate}
 library(dplyr)
@@ -73,14 +74,12 @@ library(dplyr)
 # Have to remove interval, steps, hhmm and intervalID to make the hist from 
 # unique values
 mts <- df[complete.cases(df),] %>% 
+    mutate(interval=NULL, hhmm=NULL, intervalID=NULL) %>%
     group_by(date) %>% 
-    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL, hhmm=NULL, intervalID=NULL) %>%
+    mutate(totalSteps=sum(steps), steps=NULL) %>%
     unique()
 # Plot the histogram
 hist(mts$totalSteps, 
-     breaks=20, 
-     xlim=c(0,25000), 
-     ylim=c(0,20),
      xlab="Total Steps", 
      main="Histogram of Total Number of Steps each Day")
 ```  
@@ -198,23 +197,21 @@ filled <- filled  %>%
 daily number of step values that shows a dramatically higher frequency for the
 step range 10000-11000, presumably from the 8 missing days filled in.
 
-+ Imputation of the missing values did not change the mean from its estimate, 
-but does raise the imputed median slightly to match the mean.
-
 ```{r, histogram_totalsteps_imputed}
 # Make mtsImputed re-using code from making mts
 mtsImputed <- filled %>% 
+    mutate(interval=NULL, hhmm=NULL, intervalID=NULL) %>%
     group_by(date) %>% 
-    mutate(totalSteps=sum(steps), interval=NULL, steps=NULL, hhmm=NULL, intervalID=NULL) %>%
+    mutate(totalSteps=sum(steps), steps=NULL) %>%
     unique()
 # Make the histogram
 hist(mtsImputed$totalSteps, 
-     breaks=20, 
-     xlim=c(0,25000), 
-     ylim=c(0,20),
      xlab="Total Steps", 
      main="Histogram of Total Number of Steps each Day")
 ```
+
++ Imputation of the missing values did not change the mean from its estimate, 
+but does make the median derived from imputed values slightly to match the mean.
 
 **Mean and Median from Estimated set:**
 ```{r, mean_median_estimated}
